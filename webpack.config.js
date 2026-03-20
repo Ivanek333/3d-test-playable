@@ -1,3 +1,43 @@
+const zlib = require('zlib');
+class GzipInlinePlugin {
+  apply(compiler) {
+    compiler.hooks.emit.tapAsync('GzipInlinePlugin', (compilation, callback) => {
+      const htmlAsset = compilation.assets['index.html'];
+      if (!htmlAsset) return callback();
+
+      const html = htmlAsset.source();
+      
+      const match = html.match(/<script defer="defer">([\s\S]*?)<\/script>/);
+      if (!match) return callback();
+      
+      const scriptContent = match[1];
+
+      zlib.gzip(Buffer.from(scriptContent), { level: 9 }, (err, compressed) => {
+        if (err) return callback(err);
+        
+        const b64 = compressed.toString('base64');
+        const bootstrap = `<script>(async()=>{
+  const b64='${b64}';
+  const bin=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+  const ds=new DecompressionStream('gzip');
+  const w=ds.writable.getWriter();
+  w.write(bin);w.close();
+  const code=await new Response(ds.readable).text();
+  eval(code);
+})();</script>`;
+
+        const newHtml = html.replace(/<script defer="defer">[\s\S]*?<\/script>/, bootstrap);
+        compilation.assets['index.html'] = {
+          source: () => newHtml,
+          size: () => newHtml.length
+        };
+        callback();
+      });
+    });
+  }
+}
+
+
 const path = require('path');
 const fs = require('fs');
 const webpack = require('webpack');
@@ -7,7 +47,7 @@ const TerserPlugin = require('terser-webpack-plugin');
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 module.exports = (env, argv) => {
-  const isProduction = argv.mode === 'production';
+  const isProduction = false;//argv.mode === 'production';
 
   const configRaw = fs.readFileSync(path.resolve(__dirname, 'gameconfig.json'), 'utf8');
   const config = JSON.parse(configRaw);
@@ -33,11 +73,22 @@ module.exports = (env, argv) => {
         {
           test: /\.(png|jpg|gif|svg)$/i,
           type: 'asset/inline',
-          parser: {
-            dataUrlCondition: {
-              maxSize: 50 * 1024 // 50kb
-            }
-          }
+        },
+        {
+          test: /\.(glb|gltf)$/i,
+          type: 'asset/inline',
+        },
+        {
+          test: /\.mp3$/i,
+          type: 'asset/inline',
+        },
+        {
+          test: /draco_wasm_wrapper\.js$/,
+          type: 'asset/inline',
+        },
+        {
+          test: /draco_decoder\.wasm$/,
+          type: 'asset/inline',
         }
       ]
     },
@@ -80,7 +131,8 @@ module.exports = (env, argv) => {
       }),
       isProduction ? new webpack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }) : null,
       isProduction ? new HtmlInlineScriptPlugin() : null,
-      // new BundleAnalyzerPlugin()
+      isProduction ? new GzipInlinePlugin() : null,
+      //new BundleAnalyzerPlugin()
     ],
     devtool: 'inline-source-map',
     devServer: {

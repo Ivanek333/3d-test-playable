@@ -47,7 +47,7 @@ const TerserPlugin = require('terser-webpack-plugin');
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 module.exports = (env, argv) => {
-  const isProduction = false;//argv.mode === 'production';
+  const isProduction = argv.mode === 'production';
 
   const configRaw = fs.readFileSync(path.resolve(__dirname, 'gameconfig.json'), 'utf8');
   const config = JSON.parse(configRaw);

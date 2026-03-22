@@ -1,4 +1,153 @@
 {
   "isDebug": false,
-  "designResolution": { "w": 800, "h": 1200}
+  "designResolution": { "w": 1000, "h": 1200 },
+
+  "camera": {
+    "offset":           { "x": 0, "y": 4.5, "z": -7 },
+    "lookAheadZ":       4,
+    "fovDeg":           60,
+    "near":             0.1,
+    "far":              300
+  },
+
+  "player": {
+    "initialSpeed":     1.75,
+    "speedRamp":        0.02,
+    "maxSpeed":         2.5,
+    "playableTrackWidth":   7,
+    "lateralStiffness": 36,
+    "rotationLerp":     6,
+    "jumpVelocity":     10,
+    "gravity":          20,
+    "maxLeanAngle":     60,
+    "model":            "summer_anims.glb",
+    "colliders": {
+      "running": { "hw": 0.35, "hh": 1.4, "hd": 0.35, "yOffset": 0 },
+      "jumping": { "hw": 0.35, "hh": 1.4, "hd": 0.35, "yOffset": 0.5 },
+      "sliding": { "hw": 0.35, "hh": 0.45, "hd": 0.5, "yOffset": 0 }
+    }
+  },
+
+  "track": {
+    "chunkLength":      40,
+    "chunkWidth":       8,
+    "poolSize":         6,
+    "spawnLookahead":   2.5,
+    "recycleTrail":     0.5,
+    "slotsPerChunk":    4,
+    "slotPadding":      4,
+    "obstacleStartZ":   15
+  },
+
+  "layout": {
+    "obstacleWeight":   0.35,
+    "coinWeight":       0.55,
+    "gateWeight":       0.10,
+    "coinMinCount":     5,
+    "coinMaxCount":     10
+  },
+
+  "obstacles": {
+    "model":            "stuff.glb",
+    "lowModelName":     "tnt_barrel",
+    "highModelName":    "mine",
+    "lowY":             0,
+    "highY":            2,
+    "xHalfOffset":      0.6,
+    "recycleTrailZ":    10,
+    "collider": { "hw": 0.4, "hh": 0.4, "hd": 0.4 }
+  },
+
+  "coins": {
+    "model":            "stuff.glb",
+    "modelName":        "coin",
+    "y":                0.6,
+    "spinSpeed":        0.04,
+    "recycleTrailZ":    10,
+    "poolSize":         128,
+    "collider": { "hw": 0.35, "hh": 0.35, "hd": 0.35 }
+  },
+
+  "gates": {
+    "height":           3.0,
+    "depth":            0.15,
+    "opacity":          0.82,
+    "colorPositive":    "0x4488cc",
+    "colorNegative":    "0xee4444",
+    "labelCanvasW":     256,
+    "labelCanvasH":     128,
+    "recycleTrailZ":    10,
+    "poolSize":         16,
+    "triggerZWindow":   1.0,
+    "effectAddMin":     5,
+    "effectAddMax":     30,
+    "effectMulMin":     2,
+    "effectMulMax":     5,
+    "effectMulChance":  0.4
+  },
+
+  "environment": {
+    "fogDensity":         0.012,
+    "fogColor":           "0xc9e8f0",
+    "sunElevation":       10,
+    "sunAzimuth":         240,
+    "shadowCameraFar":    80,
+    "shadowCameraExtent": 20
+  },
+
+  "input": {
+    "swipeYThreshold":  400,
+    "dragXCommit":      20
+  },
+
+  "clips": {
+    "idle":    "idle",
+    "running": "running",
+    "jumping": "jumping",
+    "sliding": "sliding",
+    "death":   "death",
+    "win":     "dance"
+  },
+
+  "images": {
+    "coin":       "coin.png",
+    "volume_on":  "volume_on.png",
+    "volume_off": "volume_off.png",
+    "cursor":     "hand.png"
+  },
+
+  "sounds": {
+    "musicFile": "music.mp3",
+    "musicVolume": 0.4,
+    "stepFiles": [
+      "step1.mp3",
+      "step2.mp3",
+      "step3.mp3"
+    ],
+    "stepVolume": 0.55,
+    "runningClipDuration": 0.8,
+    "stepThresholds": [
+      0.25,
+      0.75
+    ],
+    "stepMinInterval": 0.15,
+    "coinFile": "coin.mp3",
+    "coinVolume": 0.7,
+    "obstacleFile": "explosion.mp3",
+    "obstacleVolume": 0.7,
+    "loseFile": "lose.mp3",
+    "loseVolume": 0.8,
+    "winFile": "win.mp3",
+    "winVolume": 0.8,
+    "sfxVolume": 1
+  },
+
+  "finishLine": {
+    "triggerZ":         200,
+    "clearZoneBefore":  15,
+    "carpetLength":     6,
+    "checkersX":        8,
+    "checkersY":        3,
+    "yOffset":          0.01
+  }
 }

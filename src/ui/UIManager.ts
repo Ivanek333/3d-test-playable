@@ -11,29 +11,27 @@ export class UIManager {
   private readonly volumeOnImg:  HTMLImageElement;
   private readonly volumeOffImg: HTMLImageElement;
 
-  private readonly overlay:      HTMLElement;
+  private readonly overlayWrap:  HTMLElement;
+  private readonly overlayPanel: HTMLElement;
   private readonly overlayTitle: HTMLElement;
   private readonly overlayBtn:   HTMLButtonElement;
+  private readonly overlayCursor: HTMLImageElement;
 
-  private readonly tutorial:          HTMLElement;
-  private readonly cursorImg:         HTMLImageElement;
-  private readonly jumpCursorImg:     HTMLImageElement;
-  private readonly overlayCursorImg:  HTMLImageElement;
+  private readonly tutorial:      HTMLElement;
+  private readonly cursorImg:     HTMLImageElement;
 
   private coins: number  = 0;
   private muted: boolean = false;
 
-  private popTimeout: ReturnType<typeof setTimeout> | null = null;
+  private popTimeout:     ReturnType<typeof setTimeout> | null = null;
   private overlayTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  private readonly tweenManager = new TweenManager();
-  private tutorialRafId: number = 0;
-  private cursorX = { value: 0 };
-  private cursorY = { value: 0 };
-
+  private readonly tweenManager        = new TweenManager();
   private readonly overlayTweenManager = new TweenManager();
-  private overlayRafId: number = 0;
-  private cursorScale = { value: 1 };
+  private tutorialRafId: number = 0;
+  private overlayRafId:  number = 0;
+  private cursorX   = { value: 0 };
+  private cursorPos = { x: 0, y: 0, scale: 1 };
 
   constructor(
     container: HTMLElement,
@@ -41,28 +39,26 @@ export class UIManager {
   ) {
     this.root = this.buildDOM(container);
 
-    this.coinLabel    = this.root.querySelector<HTMLElement>('.ui-coin-count')!;
-    this.coinIcon     = this.root.querySelector<HTMLImageElement>('.ui-coin-icon')!;
-    this.volumeBtn    = this.root.querySelector<HTMLButtonElement>('.ui-volume-btn')!;
-    this.volumeOnImg  = this.root.querySelector<HTMLImageElement>('.ui-vol-on')!;
-    this.volumeOffImg = this.root.querySelector<HTMLImageElement>('.ui-vol-off')!;
-    this.overlay      = this.root.querySelector<HTMLElement>('.ui-overlay')!;
-    this.overlayTitle = this.root.querySelector<HTMLElement>('.ui-overlay-title')!;
-    this.overlayBtn   = this.root.querySelector<HTMLButtonElement>('.ui-overlay-btn')!;
-    this.tutorial           = this.root.querySelector<HTMLElement>('.ui-tutorial')!;
-    this.cursorImg          = this.root.querySelector<HTMLImageElement>('.ui-tutorial-cursor')!;
-    this.jumpCursorImg      = this.root.querySelector<HTMLImageElement>('.ui-tutorial-jump-cursor')!;
-    this.overlayCursorImg   = this.root.querySelector<HTMLImageElement>('.ui-overlay-cursor')!;
+    this.coinLabel     = this.root.querySelector<HTMLElement>('.ui-coin-count')!;
+    this.coinIcon      = this.root.querySelector<HTMLImageElement>('.ui-coin-icon')!;
+    this.volumeBtn     = this.root.querySelector<HTMLButtonElement>('.ui-volume-btn')!;
+    this.volumeOnImg   = this.root.querySelector<HTMLImageElement>('.ui-vol-on')!;
+    this.volumeOffImg  = this.root.querySelector<HTMLImageElement>('.ui-vol-off')!;
+    this.overlayWrap   = this.root.querySelector<HTMLElement>('.ui-overlay-wrap')!;
+    this.overlayPanel  = this.root.querySelector<HTMLElement>('.ui-overlay-panel')!;
+    this.overlayTitle  = this.root.querySelector<HTMLElement>('.ui-overlay-title')!;
+    this.overlayBtn    = this.root.querySelector<HTMLButtonElement>('.ui-overlay-btn')!;
+    this.overlayCursor = this.root.querySelector<HTMLImageElement>('.ui-overlay-cursor')!;
+    this.tutorial      = this.root.querySelector<HTMLElement>('.ui-tutorial')!;
+    this.cursorImg     = this.root.querySelector<HTMLImageElement>('.ui-tutorial-cursor')!;
 
-    
     const imgs = cfg().images;
-    this.coinIcon.src          = AssetManager.getTexture(imgs.coin).image.src;
-    this.volumeOnImg.src       = AssetManager.getTexture(imgs.volume_on).image.src;
-    this.volumeOffImg.src      = AssetManager.getTexture(imgs.volume_off).image.src;
-    const cursorSrc            = AssetManager.getTexture(imgs.cursor).image.src;
-    this.cursorImg.src        = cursorSrc;
-    this.jumpCursorImg.src    = cursorSrc;
-    this.overlayCursorImg.src = cursorSrc;
+    this.coinIcon.src      = AssetManager.getTexture(imgs.coin).image.src;
+    this.volumeOnImg.src   = AssetManager.getTexture(imgs.volume_on).image.src;
+    this.volumeOffImg.src  = AssetManager.getTexture(imgs.volume_off).image.src;
+    const cursorSrc        = AssetManager.getTexture(imgs.cursor).image.src;
+    this.cursorImg.src     = cursorSrc;
+    this.overlayCursor.src = cursorSrc;
 
     this.volumeBtn.addEventListener('click', this.onVolumeClick);
     this.bus.on('coin:collected', this.onCoinCollected);
@@ -80,17 +76,15 @@ export class UIManager {
     this.bus.off('game:won',       this.onGameWon);
     this.bus.off('game:started',   this.onGameStarted);
     this.volumeBtn.removeEventListener('click', this.onVolumeClick);
-    this.overlayBtn.removeEventListener('click', this.onOverlayBtnClick);
     cancelAnimationFrame(this.tutorialRafId);
-    this.tweenManager.removeAll();
     cancelAnimationFrame(this.overlayRafId);
+    this.tweenManager.removeAll();
     this.overlayTweenManager.removeAll();
-    if (this.popTimeout !== null) clearTimeout(this.popTimeout);
+    if (this.popTimeout     !== null) clearTimeout(this.popTimeout);
     if (this.overlayTimeout !== null) clearTimeout(this.overlayTimeout);
     this.root.remove();
   }
 
-  
   private buildDOM(container: HTMLElement): HTMLElement {
     const style = document.createElement('style');
     style.textContent = `
@@ -101,8 +95,8 @@ export class UIManager {
         z-index: 10;
         font-family: 'Arial Rounded MT Bold', Arial, sans-serif;
       }
- 
-      /* Coin panel */
+
+      /* ── Coin panel ───────────────────────────────────────────────────── */
       .ui-coin-panel {
         position: absolute;
         top: 16px;
@@ -121,319 +115,189 @@ export class UIManager {
                     inset 0 1px 0 rgba(255,255,255,0.07);
         white-space: nowrap;
       }
- 
       .ui-coin-icon {
-        width: 34px;
-        height: 34px;
-        object-fit: contain;
-        display: block;
+        width: 34px; height: 34px;
+        object-fit: contain; display: block;
         filter: drop-shadow(0 1px 4px rgba(0,0,0,0.55));
       }
- 
       .ui-coin-count {
-        font-size: 28px;
-        font-weight: 900;
-        color: #ffd700;
+        font-size: 28px; font-weight: 900; color: #ffd700;
         letter-spacing: 0.02em;
-        text-shadow:
-          0 1px 5px rgba(0,0,0,0.65),
-          0 0 14px rgba(255,200,0,0.35);
-        min-width: 24px;
-        text-align: left;
-        line-height: 1;
+        text-shadow: 0 1px 5px rgba(0,0,0,0.65), 0 0 14px rgba(255,200,0,0.35);
+        min-width: 24px; text-align: left; line-height: 1;
         transition: transform 0.08s cubic-bezier(.34,1.6,.64,1), color 0.08s;
         display: inline-block;
       }
- 
-      .ui-coin-count.pop {
-        transform: scale(1.4);
-        color: #fff5b0;
-      }
- 
-      /* Volume button */
-      .ui-volume-btn {
-        position: absolute;
-        bottom: 24px;
-        left: 20px;
-        width: 54px;
-        height: 54px;
-        padding: 0;
-        border: none;
-        background: none;
-        cursor: pointer;
-        pointer-events: all;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.12s ease;
-        -webkit-tap-highlight-color: transparent;
-        outline: none;
-      }
- 
-      .ui-volume-btn:active {
-        transform: scale(0.88);
-      }
- 
-      .ui-volume-btn img {
-        width: 54px;
-        height: 54px;
-        object-fit: contain;
-        pointer-events: none;
-      }
+      .ui-coin-count.pop { transform: scale(1.4); color: #fff5b0; }
 
- 
-      .ui-vol-off                      { display: none;  }
-      .ui-volume-btn.muted .ui-vol-on  { display: none;  }
+      /* ── Volume button ────────────────────────────────────────────────── */
+      .ui-volume-btn {
+        position: absolute; bottom: 24px; left: 20px;
+        width: 54px; height: 54px; padding: 0; border: none; background: none;
+        cursor: pointer; pointer-events: all;
+        display: flex; align-items: center; justify-content: center;
+        transition: transform 0.12s ease;
+        -webkit-tap-highlight-color: transparent; outline: none;
+      }
+      .ui-volume-btn:active { transform: scale(0.88); }
+      .ui-volume-btn img { width: 54px; height: 54px; object-fit: contain; pointer-events: none; }
+      .ui-vol-off                      { display: none; }
+      .ui-volume-btn.muted .ui-vol-on  { display: none; }
       .ui-volume-btn.muted .ui-vol-off { display: block; }
 
       /* ── Tutorial overlay ─────────────────────────────────────────────── */
       .ui-tutorial {
-        position: absolute;
-        bottom: 18%;
-        left: 0;
-        right: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0px;
+        position: absolute; bottom: 18%; left: 0; right: 0;
+        display: flex; flex-direction: column; align-items: center;
         pointer-events: none;
         transition: opacity 0.35s ease;
       }
-
-      .ui-tutorial.hidden {
-        opacity: 0;
-      }
-
+      .ui-tutorial.hidden { opacity: 0; }
       .ui-tutorial-hint {
-        font-size: clamp(16px, 4vw, 22px);
-        font-weight: 700;
-        color: #ffffff;
+        font-size: clamp(16px, 4vw, 22px); font-weight: 700; color: #ffffff;
         text-align: center;
-        padding: 0 24px;
-        text-shadow:
-          0 1px 4px rgba(0,0,0,0.8),
-          0 0 20px rgba(0,0,0,0.6);
-        line-height: 1.3;
-        margin-bottom: 28px;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
+        line-height: 1.3; margin-top: 12px;
       }
-
-      .ui-tutorial-hint-row {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        margin-bottom: 28px;
-        padding: 0 24px;
-      }
-
-      .ui-tutorial-hint-row .ui-tutorial-hint {
-        margin-bottom: 0;
-        padding: 0;
-        text-align: left;
-      }
-
-      .ui-tutorial-jump-col {
-        position: relative;
-        width: 52px;
-        height: 80px;
-        flex-shrink: 0;
-      }
-
-      .ui-tutorial-jump-cursor {
-        position: absolute;
-        width: 52px;
-        height: 52px;
-        object-fit: contain;
-        left: 0;
-        /* top is driven by JS */
-        filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
-      }
-
       .ui-tutorial-swipe-row {
-        position: relative;
-        width: 60%;
-        max-width: 260px;
-        height: 80px;
-        display: flex;
-        align-items: center;
+        position: relative; width: 60%; max-width: 260px; height: 80px;
+        display: flex; align-items: center;
       }
-
       .ui-tutorial-swipe-label {
-        position: absolute;
-        bottom: -4px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: clamp(20px, 5.5vw, 30px);
-        font-weight: 900;
-        color: #ffffff;
+        position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+        font-size: clamp(20px, 5.5vw, 30px); font-weight: 900; color: #ffffff;
         white-space: nowrap;
-        text-shadow:
-          0 2px 0 rgba(0,0,0,0.6),
-          0 0 24px rgba(0,0,0,0.5);
+        text-shadow: 0 2px 0 rgba(0,0,0,0.6), 0 0 24px rgba(0,0,0,0.5);
         letter-spacing: 0.02em;
       }
-
       .ui-tutorial-cursor {
-        position: absolute;
-        width: 52px;
-        height: 52px;
-        object-fit: contain;
-        top: 0;
-        /* left is driven by JS */
+        position: absolute; width: 52px; height: 52px; object-fit: contain; top: 0;
         filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
       }
 
       /* ── End-game overlay ─────────────────────────────────────────────── */
-      .ui-overlay {
-        position: absolute;
-        top: 0; left: 0; right: 0;
+
+      /*
+       * Wrap fills the screen, centres the panel, dims the background.
+       * Starts invisible; .visible fades it in.
+       */
+      .ui-overlay-wrap {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.55);
+        opacity: 0; pointer-events: none;
+        transition: opacity 0.35s ease;
+      }
+      .ui-overlay-wrap.visible {
+        opacity: 1; pointer-events: all;
+      }
+
+      /*
+       * Panel: fixed design size 360×260 "design-px".
+       * We scale it down uniformly to fit inside the screen with 24px margin
+       * on each side, keeping aspect-ratio constant.
+       * The trick: width = min(360px, 100vw - 48px)
+       *            height is set via aspect-ratio so it follows width,
+       *            but we also cap via a max-height in case landscape is very short.
+       */
+      .ui-overlay-panel {
+        position: relative;
+        width: min(80vw, 80vh * 360 / 260);
+        aspect-ratio: 360 / 260;
+        background: linear-gradient(160deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+        border-radius: 24px;
+        border: 1.5px solid rgba(255,255,255,0.12);
+        box-shadow:
+          0 24px 64px rgba(0,0,0,0.6),
+          0 0 0 1px rgba(255,255,255,0.04) inset;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: flex-end;
-        padding-bottom: 25%;
-        height: 55%;
-        align-items: center;
-        justify-content: flex-end;
-        padding-bottom: 25%;
-        height: 55%;
-        background: linear-gradient(
-          180deg,
-          rgba(0,0,0,0.82) 0%,
-          rgba(0,0,0,0.72) 80%,
-          rgba(0,0,0,0.00) 100%
-        );
-        transform: translateY(-100%);
-        transition: transform 0.55s cubic-bezier(0.34, 1.28, 0.64, 1);
-        pointer-events: none;
-      }
- 
-      .ui-overlay--visible {
-        transform: translateY(0%);
-        pointer-events: all;
-      }
- 
-      .ui-overlay--win {
-        background: linear-gradient(
-          180deg,
-          rgba(30,20,0,0.88) 0%,
-          rgba(40,28,0,0.76) 80%,
-          rgba(0,0,0,0.00) 100%
-        );
-      }
- 
-      .ui-overlay-title {
-        font-size: clamp(42px, 10vw, 72px);
-        font-weight: 900;
-        letter-spacing: 0.01em;
-        line-height: 1.05;
-        text-align: center;
-        margin-bottom: 28px;
-        color: #ffffff;
-        text-shadow:
-          0 2px 0 rgba(0,0,0,0.55),
-          0 0 40px rgba(220,60,60,0.55);
-      }
- 
-      .ui-overlay--win .ui-overlay-title {
-        text-shadow:
-          0 2px 0 rgba(0,0,0,0.55),
-          0 0 40px rgba(255,210,0,0.65);
-      }
- 
-      .ui-overlay-btn {
-        padding: 18px 56px;
-        border: none;
-        border-radius: 999px;
-        cursor: pointer;
-        pointer-events: all;
-        font-family: inherit;
-        font-size: clamp(20px, 5vw, 28px);
-        font-weight: 900;
-        letter-spacing: 0.03em;
-        color: #ffffff;
-        -webkit-tap-highlight-color: transparent;
-        outline: none;
-        transition: transform 0.10s ease, box-shadow 0.10s ease;
-        background: linear-gradient(180deg, #f04040 0%, #b81c1c 100%);
-        box-shadow:
-          0 6px 0 #7a0f0f,
-          0 8px 24px rgba(180,20,20,0.50);
-      }
- 
-      .ui-overlay--win .ui-overlay-btn {
-        background: linear-gradient(180deg, #ffe040 0%, #e8a000 100%);
-        box-shadow:
-          0 6px 0 #9a6400,
-          0 8px 24px rgba(220,160,0,0.55);
-        color: #3a2000;
-      }
- 
-      .ui-overlay-btn:active {
-        transform: translateY(4px);
-        box-shadow:
-          0 2px 0 #7a0f0f,
-          0 4px 12px rgba(180,20,20,0.40);
-      }
- 
-      .ui-overlay--win .ui-overlay-btn:active {
-        box-shadow:
-          0 2px 0 #9a6400,
-          0 4px 12px rgba(220,160,0,0.35);
+        justify-content: center;
+        gap: 0;
+        padding: 0;
+        box-sizing: border-box;
       }
 
-      .ui-overlay-cursor-wrap {
-        position: relative;
-        width: 140px;
-        height: 100px;
-        margin-top: -50px;
-        margin-right: -50px;
-        align-self: flex-center;
-        pointer-events: none;
+      /* Win tint */
+      .ui-overlay-panel.win {
+        background: linear-gradient(160deg, #1a1500 0%, #2a2000 60%, #3a2e00 100%);
+      }
+
+      .ui-overlay-title {
+        font-size: calc(min(80vw, 80vh * 360 / 260) * 0.0875);
+        font-weight: 900; letter-spacing: 0.01em; line-height: 1;
+        color: #ffffff; text-align: center;
+        text-shadow: 0 2px 0 rgba(0,0,0,0.5), 0 0 32px rgba(220,60,60,0.6);
+        margin-bottom: calc(min(80vw, 80vh * 360 / 260) * 0.036);
+      }
+      .ui-overlay-panel.win .ui-overlay-title {
+        text-shadow: 0 2px 0 rgba(0,0,0,0.5), 0 0 32px rgba(255,200,0,0.7);
+      }
+
+      .ui-overlay-btn {
+        padding: calc(min(80vw, 80vh * 360 / 260) * 0.025)
+                 calc(min(80vw, 80vh * 360 / 260) * 0.07);
+        border: none; border-radius: 999px; cursor: pointer; pointer-events: all;
+        font-family: inherit;
+        font-size: calc(min(80vw, 80vh * 360 / 260) * 0.0415);
+        font-weight: 900; letter-spacing: 0.03em; color: #ffffff;
+        -webkit-tap-highlight-color: transparent; outline: none;
+        transition: transform 0.10s ease, box-shadow 0.10s ease;
+        background: linear-gradient(180deg, #f04040 0%, #b81c1c 100%);
+        box-shadow: 0 6px 0 #7a0f0f, 0 8px 24px rgba(180,20,20,0.50);
+      }
+      .ui-overlay-panel.win .ui-overlay-btn {
+        background: linear-gradient(180deg, #ffe040 0%, #e8a000 100%);
+        box-shadow: 0 6px 0 #9a6400, 0 8px 24px rgba(220,160,0,0.55);
+        color: #3a2000;
+      }
+      .ui-overlay-btn:active {
+        transform: translateY(3px);
+        box-shadow: 0 3px 0 #7a0f0f, 0 4px 12px rgba(180,20,20,0.40);
+      }
+      .ui-overlay-panel.win .ui-overlay-btn:active {
+        box-shadow: 0 3px 0 #9a6400, 0 4px 12px rgba(220,160,0,0.35);
       }
 
       .ui-overlay-cursor {
         position: absolute;
-        width: 52px;
-        height: 52px;
+        width: calc(min(80vw, 80vh * 360 / 260) * 0.145);
+        height: calc(min(80vw, 80vh * 360 / 260) * 0.145);
         object-fit: contain;
+        pointer-events: none;
         filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55));
         transform-origin: top left;
       }
     `;
     document.head.appendChild(style);
- 
+
     container.style.position = 'relative';
- 
+
     const hud = document.createElement('div');
     hud.className = 'ui-hud';
     hud.innerHTML = `
-      <div class="ui-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-        <span class="ui-overlay-title"></span>
-        <button class="ui-overlay-btn"></button>
-        <div class="ui-overlay-cursor-wrap">
+      <div class="ui-overlay-wrap" aria-hidden="true">
+        <div class="ui-overlay-panel">
+          <span class="ui-overlay-title"></span>
+          <button class="ui-overlay-btn"></button>
           <img class="ui-overlay-cursor" src="" alt="" />
         </div>
       </div>
 
       <div class="ui-tutorial">
-        <div class="ui-tutorial-hint-row">
-          <div class="ui-tutorial-hint">Jump or slide to avoid<br>bombs and collect coins</div>
-          <div class="ui-tutorial-jump-col">
-            <img class="ui-tutorial-jump-cursor" src="" alt="" />
-          </div>
-        </div>
         <div class="ui-tutorial-swipe-row">
           <img class="ui-tutorial-cursor" src="" alt="" />
           <span class="ui-tutorial-swipe-label">Swipe to move</span>
         </div>
+        <div class="ui-tutorial-hint">Avoid bombs, collect coins!</div>
       </div>
 
       <div class="ui-coin-panel">
         <img class="ui-coin-icon" src="" alt="" />
         <span class="ui-coin-count">0</span>
       </div>
- 
+
       <button class="ui-volume-btn" aria-label="Toggle volume">
         <img class="ui-vol-on"  src="" alt="Sound on"  />
         <img class="ui-vol-off" src="" alt="Sound off" />
@@ -448,7 +312,6 @@ export class UIManager {
 
   private startTutorial(): void {
     this.scheduleCursorTween(true);
-    this.scheduleJumpCursorTween(true);
     this.tutorialRafId = requestAnimationFrame(this.tutorialLoop);
   }
 
@@ -458,64 +321,22 @@ export class UIManager {
   };
 
   private scheduleCursorTween(goRight: boolean): void {
-    const row    = this.tutorial.querySelector<HTMLElement>('.ui-tutorial-swipe-row')!;
-    const cursor = this.cursorImg;
-    const rowW   = row.offsetWidth || 220;
-    const curW   = cursor.offsetWidth || 52;
-
-    const fromX = goRight ? 0           : rowW - curW;
+    const row  = this.tutorial.querySelector<HTMLElement>('.ui-tutorial-swipe-row')!;
+    const rowW = row.offsetWidth || 220;
+    const curW = this.cursorImg.offsetWidth || 52;
+    const fromX = goRight ? 0 : rowW - curW;
     const toX   = goRight ? rowW - curW : 0;
-
-    // small vertical bob — cursor sits a bit higher at the midpoint
     this.cursorX.value = fromX;
-    cursor.style.left = `${fromX}px`;
-
+    this.cursorImg.style.left = `${fromX}px`;
     const tween = new Tween(
-      this.cursorX,
-      { value: fromX },
-      { value: toX   },
-      900,
-      easeInOutQuad,
+      this.cursorX, { value: fromX }, { value: toX }, 900, easeInOutQuad,
       (obj: { value: number }, progress?: number) => {
-        cursor.style.left = `${obj.value}px`;
-        // subtle vertical arc: highest at progress 0.5
+        this.cursorImg.style.left = `${obj.value}px`;
         const arc = Math.sin((progress ?? 0) * Math.PI) * 12;
-        cursor.style.top = `${-arc}px`;
+        this.cursorImg.style.top = `${-arc}px`;
       },
-      () => {
-        // 120 ms pause at each end before reversing
-        setTimeout(() => this.scheduleCursorTween(!goRight), 120);
-      },
+      () => setTimeout(() => this.scheduleCursorTween(!goRight), 120),
     );
-
-    this.tweenManager.add(tween);
-  }
-
-  private scheduleJumpCursorTween(goUp: boolean): void {
-    const col   = this.tutorial.querySelector<HTMLElement>('.ui-tutorial-jump-col')!;
-    const colH  = col.offsetHeight || 80;
-    const curH  = this.jumpCursorImg.offsetHeight || 52;
-
-    const fromY = goUp ? colH - curH : 0;
-    const toY   = goUp ? 0           : colH - curH;
-
-    this.cursorY.value = fromY;
-    this.jumpCursorImg.style.top = `${fromY}px`;
-
-    const tween = new Tween(
-      this.cursorY,
-      { value: fromY },
-      { value: toY   },
-      600,
-      easeInOutQuad,
-      (obj: { value: number }) => {
-        this.jumpCursorImg.style.top = `${obj.value}px`;
-      },
-      () => {
-        setTimeout(() => this.scheduleJumpCursorTween(!goUp), 180);
-      },
-    );
-
     this.tweenManager.add(tween);
   }
 
@@ -524,6 +345,26 @@ export class UIManager {
     cancelAnimationFrame(this.tutorialRafId);
     this.tweenManager.removeAll();
   };
+
+  // ── End-game overlay ──────────────────────────────────────────────────────
+
+  private scheduleOverlay(isWin: boolean): void {
+    if (this.overlayTimeout !== null) clearTimeout(this.overlayTimeout);
+    this.overlayTimeout = setTimeout(() => {
+      this.showOverlay(isWin);
+      this.overlayTimeout = null;
+    }, 900);
+  }
+
+  private showOverlay(isWin: boolean): void {
+    this.overlayTitle.textContent = isWin ? 'You won!' : 'You lost';
+    this.overlayBtn.textContent   = isWin ? 'Play now' : 'Try again';
+    this.overlayPanel.classList.toggle('win', isWin);
+    this.overlayWrap.setAttribute('aria-hidden', 'false');
+    void this.overlayWrap.offsetHeight;
+    this.overlayWrap.classList.add('visible');
+    this.startOverlayCursor();
+  }
 
   // ── Overlay cursor ────────────────────────────────────────────────────────
 
@@ -540,42 +381,48 @@ export class UIManager {
   };
 
   private scheduleOverlayCursorTween(moveIn: boolean): void {
-    const wrap  = this.overlayCursorImg.parentElement!;
-    const wrapW = wrap.offsetWidth  || 140;
-    const wrapH = wrap.offsetHeight || 100;
-    const curW  = this.overlayCursorImg.offsetWidth  || 52;
-    const curH  = this.overlayCursorImg.offsetHeight || 52;
+    const panel  = this.overlayPanel;
+    const btn    = this.overlayBtn;
+    const cursor = this.overlayCursor;
 
-    // top-left  = on the button  (small scale — "pressing")
-    // bot-right = away, bottom   (large scale — "hovering")
-    const fromLeft = moveIn ? wrapW - curW : 0;
-    const fromTop  = moveIn ? wrapH - curH : 0;
-    const toLeft   = moveIn ? 0            : wrapW - curW;
-    const toTop    = moveIn ? 0            : wrapH - curH;
-    const fromScale = moveIn ? 1.3 : 0.75;
-    const toScale   = moveIn ? 0.75 : 1.3;
+    const pW  = panel.offsetWidth   || 360;
+    const pH  = panel.offsetHeight  || 260;
+    const bW  = btn.offsetWidth     || 180;
+    const bH  = btn.offsetHeight    || 52;
+    const bL  = btn.offsetLeft      || (pW - bW) / 2;
+    const bT  = btn.offsetTop       || pH * 0.58;
+    const cW  = cursor.offsetWidth  || 52;
+    const cH  = cursor.offsetHeight || 52;
 
-    const obj = { left: fromLeft, top: fromTop, scale: fromScale };
-    this.overlayCursorImg.style.left      = `${fromLeft}px`;
-    this.overlayCursorImg.style.top       = `${fromTop}px`;
-    this.overlayCursorImg.style.transform = `scale(${fromScale})`;
+    const onX  = bL + bW * 0.65 - cW * 0.1;
+    const onY  = bT + bH * 0.15 - cH * 0.1;
+    const offX = pW * 0.78;
+    const offY = pH * 0.82;
+
+    const fromX     = moveIn ? offX : onX;
+    const fromY     = moveIn ? offY : onY;
+    const toX       = moveIn ? onX  : offX;
+    const toY       = moveIn ? onY  : offY;
+    const fromScale = moveIn ? 1.25 : 0.8;
+    const toScale   = moveIn ? 0.8  : 1.25;
+
+    this.cursorPos.x = fromX; this.cursorPos.y = fromY; this.cursorPos.scale = fromScale;
+    cursor.style.left      = `${fromX}px`;
+    cursor.style.top       = `${fromY}px`;
+    cursor.style.transform = `scale(${fromScale})`;
 
     const tween = new Tween(
-      obj,
-      { left: fromLeft, top: fromTop, scale: fromScale },
-      { left: toLeft,   top: toTop,   scale: toScale   },
-      600,
-      easeInOutQuad,
-      (o: { left: number; top: number; scale: number }) => {
-        this.overlayCursorImg.style.left      = `${o.left}px`;
-        this.overlayCursorImg.style.top       = `${o.top}px`;
-        this.overlayCursorImg.style.transform = `scale(${o.scale})`;
+      this.cursorPos,
+      { x: fromX, y: fromY, scale: fromScale },
+      { x: toX,   y: toY,   scale: toScale   },
+      600, easeInOutQuad,
+      (o: { x: number; y: number; scale: number }) => {
+        cursor.style.left      = `${o.x}px`;
+        cursor.style.top       = `${o.y}px`;
+        cursor.style.transform = `scale(${o.scale})`;
       },
-      () => {
-        setTimeout(() => this.scheduleOverlayCursorTween(!moveIn), 150);
-      },
+      () => setTimeout(() => this.scheduleOverlayCursorTween(!moveIn), 200),
     );
-
     this.overlayTweenManager.add(tween);
   }
 
@@ -586,46 +433,15 @@ export class UIManager {
     this.render();
     this.triggerPop();
   };
-  
-  private readonly onGameOver = (): void => {
-    this.scheduleOverlay(false);
-  };
- 
-  private readonly onGameWon = (): void => {
-    this.scheduleOverlay(true);
-  };
+
+  private readonly onGameOver = (): void => { this.scheduleOverlay(false); };
+  private readonly onGameWon  = (): void => { this.scheduleOverlay(true);  };
 
   private readonly onVolumeClick = (): void => {
     this.muted = !this.muted;
     this.volumeBtn.classList.toggle('muted', this.muted);
     this.bus.emit('ui:mute_changed', { muted: this.muted });
   };
-
-  private readonly onOverlayBtnClick = (): void => {
-    // this.bus.emit('game:restart', {});
-  };
-  
-  private scheduleOverlay(isWin: boolean): void {
-    if (this.overlayTimeout !== null) clearTimeout(this.overlayTimeout);
- 
-    this.overlayTimeout = setTimeout(() => {
-      this.showOverlay(isWin);
-      this.overlayTimeout = null;
-    }, 900);
-  }
- 
-  private showOverlay(isWin: boolean): void {
-    this.overlayTitle.textContent = isWin ? 'You won!'   : 'You lost';
-    this.overlayBtn.textContent   = isWin ? 'Play now'   : 'Try again';
- 
-    this.overlay.classList.toggle('ui-overlay--win', isWin);
-    this.overlay.setAttribute('aria-hidden', 'false');
- 
-    void this.overlay.offsetHeight;
-    this.overlay.classList.add('ui-overlay--visible');
-
-    this.startOverlayCursor();
-  }
 
   private render(): void {
     this.coinLabel.textContent = String(this.coins);

@@ -53,8 +53,7 @@ export class GameManager {
 
     this.input = new InputManager(
       this.scene.renderer.domElement,
-      this.bus,
-      this.scene.camera,
+      this.bus
     );
 
     this.environment = new Environment(this.scene.scene, this.scene.renderer);

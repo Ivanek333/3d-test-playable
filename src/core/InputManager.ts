@@ -1,34 +1,21 @@
-import * as THREE from 'three';
 import { EventBus } from '../core/EventBus';
 import { cfg } from '../utils/GameConfig';
 
 export class InputManager {
   private readonly canvas: HTMLElement;
-  private readonly camera: THREE.PerspectiveCamera;
-
-  private readonly raycaster   = new THREE.Raycaster();
-  private readonly playerPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-  private readonly hitPoint    = new THREE.Vector3();
-  private readonly ndcPoint    = new THREE.Vector2();
 
   private activePointerId: number | null = null;
   private pointerStartX   = 0;
-  private pointerStartY   = 0;
-  private pointerPrevX    = 0;
-  private pointerPrevY    = 0;
-  private pointerPrevTime = 0;
 
   private gestureConsumed = false;
-  private dragCommitted   = false;
+
+  private currentLane: number = 1;
 
   constructor(
     canvas: HTMLElement,
     private readonly bus: EventBus,
-    camera: THREE.PerspectiveCamera,
   ) {
     this.canvas = canvas;
-    this.camera = camera;
-
     this.canvas.style.touchAction = 'none';
     this.canvas.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointermove',   this.onPointerMove);
@@ -43,8 +30,29 @@ export class InputManager {
     window.removeEventListener('pointercancel', this.onPointerUp);
   }
 
-  updatePlayerZ(z: number): void {
-    this.playerPlane.constant = -z;
+  updatePlayerZ(_z: number): void {}
+
+  private laneToWorldX(lane: number): number {
+    const hw = cfg().player.playableTrackWidth / 4;
+    return (lane - 1) * (-hw);
+  }
+
+  private emitLane(): void {
+    this.bus.emit('input:targetX', { worldX: this.laneToWorldX(this.currentLane) });
+  }
+
+  private moveLeft(): void {
+    if (this.currentLane > 0) {
+      this.currentLane--;
+      this.emitLane();
+    }
+  }
+
+  private moveRight(): void {
+    if (this.currentLane < 2) {
+      this.currentLane++;
+      this.emitLane();
+    }
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {
@@ -52,64 +60,31 @@ export class InputManager {
 
     this.activePointerId = e.pointerId;
     this.pointerStartX   = e.clientX;
-    this.pointerStartY   = e.clientY;
-    this.pointerPrevX    = e.clientX;
-    this.pointerPrevY    = e.clientY;
-    this.pointerPrevTime = performance.now();
     this.gestureConsumed = false;
-    this.dragCommitted   = false;
-
-    this.bus.emit('input:targetX', { worldX: this.screenToWorldX(e.clientX) });
 
     this.canvas.setPointerCapture(e.pointerId);
+
+    this.emitLane();
   };
 
   private readonly onPointerMove = (e: PointerEvent): void => {
     if (e.pointerId !== this.activePointerId) return;
+    if (this.gestureConsumed) return;
 
-    const now = performance.now();
-    const dt = (now - this.pointerPrevTime) / 1000;
-    const dy = e.clientY - this.pointerPrevY;
-    const totalDX  = Math.abs(e.clientX - this.pointerStartX);
+    const threshold = cfg().input.dragXCommitPct * window.innerWidth;
+    const totalDX   = e.clientX - this.pointerStartX;
 
-    const { swipeYThreshold, dragXCommit } = cfg().input;
-
-    if (!this.gestureConsumed && !this.dragCommitted && dt > 0) {
-      const vy = dy / dt;
-
-      if (vy < -swipeYThreshold) {
-        this.bus.emit('input:jump',  {});
-        this.gestureConsumed = true;
-      } else if (vy > swipeYThreshold) {
-        this.bus.emit('input:slide', {});
-        this.gestureConsumed = true;
-      }
+    if (totalDX < -threshold) {
+      this.moveLeft();
+      this.gestureConsumed = true;
+    } else if (totalDX > threshold) {
+      this.moveRight();
+      this.gestureConsumed = true;
     }
-
-    if (!this.gestureConsumed && totalDX > dragXCommit) {
-      this.dragCommitted = true;
-    }
-
-    this.bus.emit('input:targetX', { worldX: this.screenToWorldX(e.clientX) });
-
-    this.pointerPrevX = e.clientX;
-    this.pointerPrevY = e.clientY;
-    this.pointerPrevTime = now;
   };
 
   private readonly onPointerUp = (e: PointerEvent): void => {
     if (e.pointerId !== this.activePointerId) return;
     this.activePointerId = null;
   };
-
-  private screenToWorldX(screenX: number): number {
-    this.ndcPoint.set((screenX / window.innerWidth) * 2 - 1, 0);
-    this.raycaster.setFromCamera(this.ndcPoint, this.camera);
-
-    const hit = this.raycaster.ray.intersectPlane(this.playerPlane, this.hitPoint);
-    if (!hit) return 0;
-
-    const hw = cfg().player.playableTrackWidth / 2;
-    return THREE.MathUtils.clamp(hit.x, -hw, hw);
-  }
 }

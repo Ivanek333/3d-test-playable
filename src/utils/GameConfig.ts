@@ -118,10 +118,9 @@ export interface GameConfig {
   };
 
   input: {
-    swipeYThreshold: number;
-    dragXCommit:     number;
+    dragXCommitPct: number;
   };
-
+  
   clips: {
     idle:    string;
     running: string;

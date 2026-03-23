@@ -96,8 +96,7 @@
   },
 
   "input": {
-    "swipeYThreshold":  400,
-    "dragXCommit":      20
+    "dragXCommitPct": 0.1
   },
 
   "clips": {
